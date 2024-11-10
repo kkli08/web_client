@@ -1,4 +1,5 @@
 use reqwest::blocking::Client;
+#[allow(unused_imports)]
 use reqwest::Error as ReqwestError;
 use structopt::StructOpt;
 use url::{ParseError, Url};
@@ -34,7 +35,7 @@ fn main() {
                         println!("Response:\n{}", response);
                     }
                     Err(e) => {
-                        println!("Request Error: {}", e);
+                        println!("Error: {}", e);
                     }
                 }
             }
@@ -110,9 +111,27 @@ fn check_port_number(url: &Url) -> Result<(), String> {
 }
 
 // Function to handle GET request using reqwest
-fn make_get_request(url: &Url) -> Result<String, ReqwestError> {
+fn make_get_request(url: &Url) -> Result<String, String> {
     let client = Client::new();
-    let response = client.get(url.as_str()).send()?;
-    let text = response.text()?;
-    Ok(text)
+    let response = client.get(url.as_str()).send();
+
+    match response {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                Err(format!("Request failed with status code: {}.", resp.status().as_u16()))
+            } else {
+                match resp.text() {
+                    Ok(text) => Ok(text),
+                    Err(e) => Err(format!("Failed to read response text: {}", e)),
+                }
+            }
+        }
+        Err(e) => {
+            if e.is_connect() {
+                Err("Unable to connect to the server. Perhaps the network is offline or the server hostname cannot be resolved.".to_string())
+            } else {
+                Err(format!("Request Error: {}", e))
+            }
+        }
+    }
 }
