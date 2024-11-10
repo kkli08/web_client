@@ -21,13 +21,34 @@ struct CurlArgs {
     /// Data to send with POST request in the form 'key1=value1&key2=value2'
     #[structopt(short = "d", long = "data")]
     data: Option<String>,
+
+    /// JSON data to send with POST request
+    #[structopt(long = "json")]
+    json: Option<String>,
 }
 
 fn main() {
     let args = CurlArgs::from_args();
     let url_input = args.url;
-    let method = args.method.to_uppercase();
-    let data = args.data;
+    let mut method = args.method.to_uppercase();
+    let mut data = args.data;
+    let json_data = args.json;
+    let mut json_value: Option<Value> = None;
+
+    // If --json is specified
+    if let Some(ref json_str) = json_data {
+        // Set method to POST
+        method = "POST".to_string();
+        // Clear data as we'll use JSON
+        data = None;
+        // Print JSON data
+        println!("JSON: {}", json_str);
+        // Parse JSON data, panic if invalid
+        json_value = Some(
+            serde_json::from_str(json_str)
+                .unwrap_or_else(|e| panic!("Invalid JSON: {}", e)),
+        );
+    }
 
     // Attempt to parse URL
     match Url::parse(&url_input) {
@@ -46,7 +67,7 @@ fn main() {
                 println!("Error: {}", e);
             } else {
                 // Proceed to make request
-                match make_request(&url, &method, data) {
+                match make_request(&url, &method, data, json_value) {
                     Ok(response) => {
                         // Handle response
                         handle_response(&response);
@@ -63,6 +84,10 @@ fn main() {
 
             if let Some(ref data_str) = data {
                 println!("Data: {}", data_str);
+            }
+
+            if let Some(ref json_str) = json_data {
+                println!("JSON: {}", json_str);
             }
 
             match e {
@@ -132,24 +157,34 @@ fn check_port_number(url: &Url) -> Result<(), String> {
 }
 
 // Function to make HTTP request
-fn make_request(url: &Url, method: &str, data: Option<String>) -> Result<String, String> {
+fn make_request(
+    url: &Url,
+    method: &str,
+    data: Option<String>,
+    json_value: Option<Value>,
+) -> Result<String, String> {
     let client = Client::new();
 
-    let response = match method {
-        "GET" => client.get(url.as_str()).send(),
-        "POST" => {
-            if let Some(data_str) = data {
-                // Parse data into key-value pairs
-                let params = parse_data(&data_str);
-                client.post(url.as_str()).form(&params).send()
-            } else {
-                client.post(url.as_str()).send()
-            }
-        }
+    let mut request_builder = match method {
+        "GET" => client.get(url.as_str()),
+        "POST" => client.post(url.as_str()),
         _ => {
             return Err(format!("Unsupported HTTP method: {}", method));
         }
     };
+
+    if let Some(json) = json_value {
+        // Send JSON data
+        request_builder = request_builder
+            .header("Content-Type", "application/json")
+            .json(&json);
+    } else if let Some(ref data_str) = data {
+        // Parse data into key-value pairs
+        let params = parse_data(data_str);
+        request_builder = request_builder.form(&params);
+    }
+
+    let response = request_builder.send();
 
     match response {
         Ok(resp) => {
