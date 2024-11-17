@@ -233,7 +233,7 @@ fn handle_response(response: &str) {
         }
         Err(_) => {
             // Not JSON, print response directly
-            println!("Response:\n{}", response);
+            print!("Response:\n{}", response);
         }
     }
 }
