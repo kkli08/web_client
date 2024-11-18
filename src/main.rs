@@ -46,7 +46,7 @@ fn main() {
         // Parse JSON data, panic if invalid
         json_value = Some(
             serde_json::from_str(json_str)
-                .unwrap_or_else(|e| panic!("Invalid JSON: {}", e)),
+                .unwrap_or_else(|e| panic!("Invalid JSON: {:?}", e)),
         );
     }
 
